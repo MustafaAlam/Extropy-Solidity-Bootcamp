@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+//@audit Fix the version
 pragma solidity ^0.8;
 
 import "solmate/tokens/ERC20.sol";
@@ -37,6 +38,7 @@ contract BrokenSea {
     /// @param erc20Token The ERC20 token contract.
     /// @param price The price the caller is willing to accept.
     ///        Reverts if the bid price is less than this amount.
+    //@audit Function should be nonentrant.
     function acceptBid(
         address bidder,
         ERC721 erc721Token,
@@ -55,6 +57,7 @@ contract BrokenSea {
         require(bidPrice >= price, "BrokenSea::fillBid/BID_TOO_LOW");
 
         // Mark bid as filled before performing transfers.
+        //@audit Deleting mapping causes mapping value to default. Entry remains.
         delete bids[bidder][key][erc721TokenId];
 
         // solmate's SafeTransferLib uses a low-level call, so we
@@ -64,12 +67,18 @@ contract BrokenSea {
             size := extcodesize(erc20Token)
         }
         require(size > 0, "BrokenSea::fillBid/NO_CODE");
+        //@audit Approval of ERC20 not given to this contract
+        //@audit Solmate library does not get called. As safeTransferFrom() is internal which can only be 
+        //called by a derived contract. Now ERC20 contract may not be derived from solmate.
         erc20Token.safeTransferFrom(bidder, msg.sender, price);
 
         // Since this is _not_ a low-level call, the Solidity
         // compiler will insert an `extcodesize` check like the one
         // above; no need to do it ourselves here.
         // Reverts if the caller does not own the NFT.
+        //@audit-OK Approval of ERC721 not given to this contract. Not required as owner of NFT is the caller.
+        //@audit Bidder can be a contract which can reenter with onERC721Received() and drain the other NFTs 
+        //of the owner at minimum price
         erc721Token.transferFrom(msg.sender, bidder, erc721TokenId);
     }
 
